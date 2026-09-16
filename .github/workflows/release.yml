@@ -1,0 +1,121 @@
+name: Release tags
+
+# On every push to main, cut the next semver tags so consumers can pin
+# @v1 (moving major) or @v1.2.3 (immutable full).
+#
+# Default bump on push: patch (v1.2.3 → v1.2.4).
+# Use workflow_dispatch to choose patch | minor | major (breaking).
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Semver bump type
+        type: choice
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-tags
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Create semver tags
+    runs-on: ubuntu-latest
+    outputs:
+      full: ${{ steps.bump.outputs.full }}
+      created: ${{ steps.bump.outputs.created }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute next version and push tags
+        id: bump
+        env:
+          BUMP: ${{ github.event_name == 'workflow_dispatch' && inputs.bump || 'patch' }}
+        run: |
+          set -euo pipefail
+
+          git fetch --tags --force
+
+          LATEST="$(git tag --list 'v*.*.*' --sort=-v:refname | head -n1 || true)"
+          if [ -z "${LATEST}" ]; then
+            # Bootstrap: first full release is always v1.0.0
+            MAJOR=1
+            MINOR=0
+            PATCH=0
+          else
+            echo "Latest full tag: ${LATEST}"
+            VER="${LATEST#v}"
+            IFS=. read -r MAJOR MINOR PATCH <<< "${VER}"
+            case "${BUMP}" in
+              major)
+                MAJOR=$((MAJOR + 1))
+                MINOR=0
+                PATCH=0
+                ;;
+              minor)
+                MINOR=$((MINOR + 1))
+                PATCH=0
+                ;;
+              patch)
+                PATCH=$((PATCH + 1))
+                ;;
+              *)
+                echo "Unknown bump: ${BUMP}" >&2
+                exit 1
+                ;;
+            esac
+          fi
+
+          FULL="v${MAJOR}.${MINOR}.${PATCH}"
+          MAJOR_TAG="v${MAJOR}"
+          MINOR_TAG="v${MAJOR}.${MINOR}"
+
+          echo "Bump=${BUMP} → full=${FULL} major=${MAJOR_TAG} minor=${MINOR_TAG}"
+          echo "full=${FULL}" >> "$GITHUB_OUTPUT"
+
+          if git rev-parse "${FULL}" >/dev/null 2>&1; then
+            echo "Full tag ${FULL} already exists — nothing to do"
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git tag -a "${FULL}" -m "Release ${FULL}"
+          git tag -f -a "${MAJOR_TAG}" -m "Latest ${MAJOR_TAG} → ${FULL}"
+          git tag -f -a "${MINOR_TAG}" -m "Latest ${MINOR_TAG} → ${FULL}"
+
+          git push origin "refs/tags/${FULL}"
+          git push origin "refs/tags/${MAJOR_TAG}" --force
+          git push origin "refs/tags/${MINOR_TAG}" --force
+
+          echo "created=true" >> "$GITHUB_OUTPUT"
+          echo "Published ${FULL} (also moved ${MAJOR_TAG} and ${MINOR_TAG})"
+
+      - name: Create GitHub Release
+        if: steps.bump.outputs.created == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FULL: ${{ steps.bump.outputs.full }}
+        run: |
+          set -euo pipefail
+          gh release create "${FULL}" \
+            --title "${FULL}" \
+            --generate-notes \
+            --latest

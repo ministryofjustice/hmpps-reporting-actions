@@ -21,6 +21,10 @@ docs/versioning.md          # tag / pin convention
 Pin to a semver major tag (e.g. `@v1`), never `@main`. See
 [`docs/versioning.md`](docs/versioning.md).
 
+Pushing to `main` auto-creates the next patch tags via
+[`.github/workflows/release.yml`](.github/workflows/release.yml)
+(`v1.0.0` + moving `v1` / `v1.0`). Use **workflow_dispatch** for minor/major.
+
 ## Actions
 
 | Action | Purpose |
