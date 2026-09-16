@@ -1,0 +1,32 @@
+name: Setup Node and npm
+description: >
+  Checkout is left to the caller. Sets up Node (with npm cache) and runs the
+  install command used by HMPPS Node apps (default: npm run setup --no-audit).
+
+inputs:
+  node-version:
+    description: Node version (major or full, e.g. 24 or 24.12)
+    required: false
+    default: '24'
+  cache-dependency-path:
+    description: Lockfile path for actions/setup-node cache
+    required: false
+    default: package-lock.json
+  install-command:
+    description: Shell command to install dependencies
+    required: false
+    default: npm run setup --no-audit
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node ${{ inputs.node-version }}
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
+
+    - name: Install dependencies
+      shell: bash
+      run: ${{ inputs.install-command }}
