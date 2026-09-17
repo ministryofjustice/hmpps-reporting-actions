@@ -21,6 +21,13 @@ docs/versioning.md          # tag / pin convention
 Pin to a semver major tag (e.g. `@v1`), never `@main`. See
 [`docs/versioning.md`](docs/versioning.md).
 
+**MoJ org policy:** consuming workflows that `uses:` a composite action
+from this repo must pin a **full commit SHA** (not `@v1`). Recommended form:
+
+```yaml
+uses: ministryofjustice/hmpps-reporting-actions/actions/setup-node-npm@2f0798b99b99d4b1fda8540e7dbce0ad0e9d890f # v1.0.2
+```
+
 Pushing to `main` auto-creates the next patch tags via
 [`.github/workflows/release.yml`](.github/workflows/release.yml)
 (`v1.0.0` + moving `v1` / `v1.0`). Use **workflow_dispatch** for minor/major.
