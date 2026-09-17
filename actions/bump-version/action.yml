@@ -1,0 +1,103 @@
+name: Bump version
+description: >-
+  Language-agnostic core of the "bump shared library version" workflow:
+  applies a caller-supplied version to a caller-supplied file, then commits,
+  tags, pushes, and opens a PR. The stack-specific "how do I find the latest
+  version" and "how do I apply it to this repo's build file" logic is
+  supplied by the caller via `current-version` and `apply-command`, so this
+  action stays usable for both Gradle/Maven (Phase 1) and Node (Phase 2)
+  consumers without modification.
+
+inputs:
+  current-version:
+    description: >-
+      The resolved version string to bump to. Callers compute this
+      themselves (e.g. Maven metadata curl+grep for Gradle, `npm view` for
+      Node) before invoking this action.
+    required: true
+  apply-command:
+    description: >-
+      Shell command that rewrites the caller's build file(s) to reference
+      the current-version input's value. Run via `bash -c`. Typical
+      examples (with <VERSION> standing in for the interpolated
+      current-version value):
+        Gradle:  perl -pi -e 's|...:\d+\.\d+\.\d+"|...:<VERSION>"|' build.gradle.kts
+        Node:    npm install some-lib@<VERSION> --save-exact
+    required: true
+  files-to-commit:
+    description: Space-separated list of files to `git add` before committing
+    required: true
+  branch-prefix:
+    description: Prefix for the generated branch/tag name
+    type: string
+    default: 'feature/bump-lib-to-v'
+  tag-prefix:
+    description: Prefix for the generated git tag (empty string disables tagging)
+    type: string
+    default: 'Lib-v'
+  pr-title-prefix:
+    description: Prefix for the generated pull request title
+    type: string
+    default: 'Bump library version to '
+  base-branch:
+    description: Branch to open the pull request against
+    type: string
+    default: 'main'
+  github-token:
+    description: Token used for `git push` and `gh pr create`
+    required: true
+
+outputs:
+  branch-name:
+    description: The branch that was created and pushed
+    value: ${{ steps.branch.outputs.name }}
+
+runs:
+  using: composite
+  steps:
+    # ── Apply the stack-specific version bump ───────────────────────────
+    # TODO(Phase 2): Node consumers pass an `npm`-based apply-command here;
+    # no change needed in this action, the seam already supports it.
+    - name: Apply version
+      shell: bash
+      run: ${{ inputs.apply-command }}
+
+    - name: Compute branch name
+      id: branch
+      shell: bash
+      run: |
+        NAME="${{ inputs.branch-prefix }}${{ inputs.current-version }}"
+        echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
+    # ── Commit, tag, push ────────────────────────────────────────────────
+    # Matches the git steps previously inlined in each consuming repo's
+    # bump-version.yml (branch/commit/tag/push were identical across
+    # repos; only version-detection and apply differed).
+    - name: Commit version bump
+      shell: bash
+      run: |
+        git config user.name "github-actions"
+        git config user.email "github-actions@github.com"
+        git checkout -b "${{ steps.branch.outputs.name }}"
+        git add ${{ inputs.files-to-commit }}
+        git commit -m "${{ inputs.pr-title-prefix }}${{ inputs.current-version }}"
+        git push origin "${{ steps.branch.outputs.name }}"
+
+    - name: Tag version bump
+      if: inputs.tag-prefix != ''
+      shell: bash
+      run: |
+        TAG="${{ inputs.tag-prefix }}${{ inputs.current-version }}"
+        git tag -a "$TAG" -m "$TAG"
+        git push origin "$TAG"
+
+    - name: Create pull request
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        gh pr create \
+          -B "${{ inputs.base-branch }}" \
+          -H "${{ steps.branch.outputs.name }}" \
+          --title "${{ inputs.pr-title-prefix }}${{ inputs.current-version }}" \
+          --body ''

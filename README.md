@@ -30,6 +30,10 @@ Pushing to `main` auto-creates the next patch tags via
 | Action | Purpose |
 |--------|---------|
 | [`setup-node-npm`](actions/setup-node-npm) | Setup Node + npm install (`npm run setup` by default) |
+| [`bump-version`](actions/bump-version) | Apply version bump, commit, tag, open PR |
+
+Used from `hmpps-reporting-workflows` (`node_validate`, `pr_checks`) and from app
+stubs (`bump-version.yml`).
 
 ## Related
 
