@@ -1,0 +1,86 @@
+name: Prepare IP allowlist groups
+description: >
+  Writes the HMPPS IP allowlist groups file (ip-allowlist-groups.yaml) to
+  /tmp and returns the extra Helm args needed so generic-service can expand
+  allowlist.groups (e.g. internal, mojvpn) into CIDRs on the ingress.
+
+  Without this, nginx whitelist-source-range only contains literal CIDRs
+  from values-*.yaml and MoJ VPN users get 403 (port-forward still works).
+
+  Sources, in order:
+    1. allowlist-yaml-gz input — pass the org Actions variable
+       vars.HMPPS_IP_ALLOWLIST_GROUPS_YAML_GZ (published org-wide by
+       ministryofjustice/hmpps-ip-allowlists publish.yml; gzip+base64).
+    2. gh api fallback — fetches ip-allowlist-groups.yaml from
+       ministryofjustice/hmpps-ip-allowlists using github-token.
+  Fails if neither source works, to avoid silently deploying an ingress
+  without VPN/internal CIDRs.
+
+inputs:
+  allowlist-yaml-gz:
+    description: >
+      Gzipped+base64 allowlist groups YAML. Pass
+      ${{ vars.HMPPS_IP_ALLOWLIST_GROUPS_YAML_GZ }} (composite actions cannot
+      read vars directly).
+    required: false
+    default: ''
+  allowlist-version:
+    description: >
+      Allowlist version label. Pass
+      ${{ vars.HMPPS_IP_ALLOWLIST_GROUPS_VERSION }}. Sets
+      generic-service.allowlist_version when non-empty.
+    required: false
+    default: ''
+  github-token:
+    description: >
+      Token used only for the gh api fallback; must be able to read
+      ministryofjustice/hmpps-ip-allowlists.
+    required: false
+    default: ''
+
+outputs:
+  helm-args:
+    description: Extra args to append to helm upgrade (--values … [--set generic-service.allowlist_version=…])
+    value: ${{ steps.prepare.outputs.extra }}
+  groups-file:
+    description: Path of the written allowlist groups YAML file
+    value: /tmp/ip-allowlist-groups.yaml
+
+runs:
+  using: composite
+  steps:
+    - name: Prepare IP allowlist groups
+      id: prepare
+      shell: bash
+      env:
+        IP_ALLOWLIST_GROUPS_YAML_GZ: ${{ inputs.allowlist-yaml-gz }}
+        IP_ALLOWLIST_GROUPS_VERSION: ${{ inputs.allowlist-version }}
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+        ARGS_FILE=$(mktemp)
+        : > "$ARGS_FILE"
+
+        if [ -n "${IP_ALLOWLIST_GROUPS_YAML_GZ}" ]; then
+          echo "${IP_ALLOWLIST_GROUPS_YAML_GZ}" | base64 --decode | gunzip -c > /tmp/ip-allowlist-groups.yaml
+          echo "--values /tmp/ip-allowlist-groups.yaml" >> "$ARGS_FILE"
+          echo "Loaded IP allowlist groups from org var HMPPS_IP_ALLOWLIST_GROUPS_YAML_GZ ($(wc -c < /tmp/ip-allowlist-groups.yaml) bytes)"
+        elif [ -n "${GH_TOKEN}" ] \
+            && gh api repos/ministryofjustice/hmpps-ip-allowlists/contents/ip-allowlist-groups.yaml \
+              --jq '.content' 2>/dev/null | base64 --decode > /tmp/ip-allowlist-groups.yaml \
+            && [ -s /tmp/ip-allowlist-groups.yaml ]; then
+          echo "--values /tmp/ip-allowlist-groups.yaml" >> "$ARGS_FILE"
+          echo "Loaded IP allowlist groups via gh api fallback ($(wc -c < /tmp/ip-allowlist-groups.yaml) bytes)"
+        else
+          echo "::error::Could not load IP allowlist groups: org var HMPPS_IP_ALLOWLIST_GROUPS_YAML_GZ is empty and the gh api fallback failed."
+          echo "::error::Without this, allowlist.groups in values-*.yaml will not expand and ingress will 403 for VPN users."
+          exit 1
+        fi
+
+        if [ -n "${IP_ALLOWLIST_GROUPS_VERSION}" ]; then
+          echo "--set generic-service.allowlist_version=${IP_ALLOWLIST_GROUPS_VERSION}" >> "$ARGS_FILE"
+        fi
+
+        EXTRA=$(tr '\n' ' ' < "$ARGS_FILE" | sed 's/[[:space:]]*$//')
+        echo "extra=${EXTRA}" >> "$GITHUB_OUTPUT"
+        echo "Allowlist helm args: ${EXTRA}"

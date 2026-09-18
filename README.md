@@ -38,9 +38,10 @@ Pushing to `main` auto-creates the next patch tags via
 |--------|---------|
 | [`setup-node-npm`](actions/setup-node-npm) | Setup Node + npm install (`npm run setup` by default) |
 | [`bump-version`](actions/bump-version) | Apply version bump, commit, tag, open PR |
+| [`prepare-ip-allowlist`](actions/prepare-ip-allowlist) | Write HMPPS IP allowlist groups file + emit Helm args (expands `allowlist.groups` to CIDRs; prevents ingress 403 for VPN users) |
 
-Used from `hmpps-reporting-workflows` (`node_validate`, `pr_checks`) and from app
-stubs (`bump-version.yml`).
+Used from `hmpps-reporting-workflows` (`node_validate`, `pr_checks`, `deploy_env`)
+and from app stubs (`bump-version.yml`).
 
 ## Related
 
