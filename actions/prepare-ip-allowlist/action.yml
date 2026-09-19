@@ -19,16 +19,16 @@ description: >
 inputs:
   allowlist-yaml-gz:
     description: >
-      Gzipped+base64 allowlist groups YAML. Pass
-      ${{ vars.HMPPS_IP_ALLOWLIST_GROUPS_YAML_GZ }} (composite actions cannot
-      read vars directly).
+      Gzipped+base64 allowlist groups YAML. Pass the org Actions variable
+      vars.HMPPS_IP_ALLOWLIST_GROUPS_YAML_GZ from the calling workflow
+      (composite actions cannot read vars directly).
     required: false
     default: ''
   allowlist-version:
     description: >
-      Allowlist version label. Pass
-      ${{ vars.HMPPS_IP_ALLOWLIST_GROUPS_VERSION }}. Sets
-      generic-service.allowlist_version when non-empty.
+      Allowlist version label. Pass the org Actions variable
+      vars.HMPPS_IP_ALLOWLIST_GROUPS_VERSION from the calling workflow.
+      Sets generic-service.allowlist_version when non-empty.
     required: false
     default: ''
   github-token:
