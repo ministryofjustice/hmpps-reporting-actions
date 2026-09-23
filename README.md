@@ -31,9 +31,25 @@ Pushing to `main` auto-creates the next patch tags via
 |--------|---------|
 | [`setup-node-npm`](actions/setup-node-npm) | Setup Node + npm install (`npm run setup` by default) |
 | [`bump-version`](actions/bump-version) | Apply version bump, commit, tag, open PR |
+| [`update-sentry-release-secret`](actions/update-sentry-release-secret) | Patch a k8s secret key (default `RELEASE_GIT_SHA`) with the deployed git SHA |
 
-Used from `hmpps-reporting-workflows` (`node_validate`, `pr_checks`) and from app
+Used from `hmpps-reporting-workflows` (`node_validate`, `pr_checks`, `deploy_env`) and from app
 stubs (`bump-version.yml`).
+
+### `update-sentry-release-secret`
+
+Assumes kubectl is already authenticated (e.g. by `deploy_env`). Does not create
+the secret — Cloud Platform Terraform does not manage Sentry secrets; the secret
+must already exist in the target namespace.
+
+```yaml
+- uses: ministryofjustice/hmpps-reporting-actions/actions/update-sentry-release-secret@v1
+  with:
+    secret-name: hmpps-digital-prison-reporting-mi-ui-sentry
+    release-sha: ${{ steps.sentry-sha.outputs.sha }}
+    # secret-key: RELEASE_GIT_SHA   # default
+    namespace: ${{ secrets.KUBE_NAMESPACE }}
+```
 
 ## Related
 
