@@ -1,0 +1,36 @@
+name: Update Sentry release secret
+description: >-
+  Patches a Kubernetes secret key (default RELEASE_GIT_SHA) with the git SHA
+  of the release actually being deployed. Assumes kubectl is already
+  authenticated to the target cluster and namespace (e.g. by deploy_env).
+  Does not print secret payloads or tokens.
+
+inputs:
+  secret-name:
+    description: Kubernetes secret name to patch (must already exist)
+    required: true
+  release-sha:
+    description: Raw git SHA for the Sentry release (not Build.<sha>)
+    required: true
+  secret-key:
+    description: Key within the secret to update
+    required: false
+    default: RELEASE_GIT_SHA
+  namespace:
+    description: >-
+      Kubernetes namespace. When empty, uses the current kubectl context
+      namespace.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Update Sentry release secret
+      shell: bash
+      env:
+        SECRET_NAME: ${{ inputs.secret-name }}
+        RELEASE_SHA: ${{ inputs.release-sha }}
+        SECRET_KEY: ${{ inputs.secret-key }}
+        NAMESPACE: ${{ inputs.namespace }}
+      run: bash "${{ github.action_path }}/update.sh"
